@@ -3,45 +3,52 @@ var express = require('express');
 var mongoose = require('mongoose');
 var bodyParser = require('body-parser');
 var passport = require('passport');
-var gameController = require('./controllers/game');
-var userController = require('./controllers/user');
-var authController = require('./controllers/auth');
+var cookieParser = require('cookie-parser');
+var expressSession = require('express-session');
+var conf = require('./conf/conf.local');
+var initPassport = require('./passport/init');
 
 // Connect to the gamelocker MongoDB
-mongoose.connect('mongodb://localhost:27017/thebuilder');
+mongoose.connect(conf.url);
 
 // Create our Express application
 var app = express();
 
+app.use(bodyParser.json());
 // Use the body-parser package in our application
 app.use(bodyParser.urlencoded({
   extended: true
 }));
+app.use(cookieParser());
 
 // Use the passport package in our application
+app.use(expressSession({secret: 'thebuilderSecret_2910471827'}));
 app.use(passport.initialize());
+app.use(passport.session());
 
-// Create our Express router
-var router = express.Router();
+initPassport(passport);
 
-// Create endpoint handlers for /games
-router.route('/games')
-  .post(authController.isAuthenticated, gameController.postGames)
-  .get(authController.isAuthenticated, gameController.getGames);
+var routes = require('./conf/routes')(passport);
+app.use('/api', routes);
 
-// Create endpoint handlers for /games/:game_id
-router.route('/games/:game_id')
-  .get(authController.isAuthenticated, gameController.getGame)
-  .put(authController.isAuthenticated, gameController.putGame)
-  .delete(authController.isAuthenticated, gameController.deleteGame);
+app.use(function(req, res, next) {
+    var err = new Error('Not Found');
+    err.status = 404;
+    next(err);
+});
 
-// Create endpoint handlers for /users
-router.route('/users')
-  .post(userController.postUsers)
-  .get(authController.isAuthenticated, userController.getUsers);
-
-// Register all our routes with /api
-app.use('/api', router);
+// development error handler
+// will print stacktrace
+if (app.get('env') === 'development') {
+    app.use(function(err, req, res, next) {
+        res.status(err.status || 500);
+        console.log('error', {
+            message: err.message,
+            error: err
+        });
+        res.json(err);
+    });
+}
 
 // Start the server
 app.listen(3000);
